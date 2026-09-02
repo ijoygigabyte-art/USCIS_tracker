@@ -1,5 +1,3 @@
-selenium
-selenium-stealth
 requests
 flask
 flask-socketio
@@ -7,3 +5,4 @@ schedule
 plyer
 python-dotenv
 cryptography
+gunicorn

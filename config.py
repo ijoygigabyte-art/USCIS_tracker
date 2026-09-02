@@ -53,8 +53,8 @@ EMAIL_TO = os.getenv("USCIS_EMAIL_TO", "")
 # ─────────────────────────────────────────────────────────
 # Dashboard
 # ─────────────────────────────────────────────────────────
-DASHBOARD_HOST = os.getenv("USCIS_DASHBOARD_HOST", "127.0.0.1")
-DASHBOARD_PORT = int(os.getenv("USCIS_DASHBOARD_PORT", "5000"))
+DASHBOARD_HOST = os.getenv("HOST", os.getenv("USCIS_DASHBOARD_HOST", "0.0.0.0"))
+DASHBOARD_PORT = int(os.getenv("PORT", os.getenv("USCIS_DASHBOARD_PORT", "8080")))
 
 # ─────────────────────────────────────────────────────────
 # myUSCIS API endpoints
