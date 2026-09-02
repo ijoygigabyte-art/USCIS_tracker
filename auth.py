@@ -12,12 +12,6 @@ import logging
 import threading
 from pathlib import Path
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from cryptography.fernet import Fernet
 
 import config
@@ -80,6 +74,16 @@ def login_and_capture_cookies(timeout_seconds: int = 600) -> list[dict]:
         if existing:
             logger.info("Valid cookies already available.")
             return existing
+
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
+            from selenium.webdriver.support import expected_conditions as EC
+        except ImportError:
+            logger.error("Selenium not installed in this environment. Please paste cookies directly into the dashboard.")
+            return []
 
         logger.info("Opening Chrome for myUSCIS login...")
 

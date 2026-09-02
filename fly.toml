@@ -1,5 +1,5 @@
-# fly.toml app configuration file generated for uscis-tracker
-app = 'uscis-tracker'
+# fly.toml app configuration file generated for uscis-tracker-8bf0rq
+app = 'uscis-tracker-8bf0rq'
 primary_region = 'iad'
 
 [build]
