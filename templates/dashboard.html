@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USCIS Live Tracker — Authentic Results</title>
+    <meta name="description" content="Track your USCIS case status and detect silent updates in real time.">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="header-inner">
+            <a href="/" class="logo">
+                <div class="logo-icon">📋</div>
+                <div>
+                    <div class="logo-text">USCIS Live Tracker</div>
+                    <div class="logo-subtitle">Authentic Real-Time Updates & Silent Detection</div>
+                </div>
+            </a>
+            <div class="header-actions">
+                <button class="btn btn-ghost" onclick="window.open('https://my.uscis.gov/', '_blank')">
+                    🔗 Open myUSCIS
+                </button>
+                <button class="btn btn-ghost" onclick="resetToEmpty()">
+                    🗑️ Reset to Empty
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main" id="main-content">
+
+        <!-- Live Query Input Panel -->
+        <div class="live-query-card" id="query-panel">
+            <div class="query-header">
+                <div class="query-title">
+                    <span>⚡</span>
+                    Query Authentic Live Data
+                </div>
+                <div class="live-badge">
+                    <span class="dot"></span>
+                    Live Direct API
+                </div>
+            </div>
+
+            <div class="query-grid">
+                <div class="form-group">
+                    <label class="form-label" for="receipt-input">USCIS Receipt Number(s)</label>
+                    <input 
+                        type="text" 
+                        id="receipt-input" 
+                        class="form-control" 
+                        placeholder="e.g. IOE0912345678, IOE0987654321, MSC2190012345"
+                        value=""
+                        autocomplete="off"
+                    >
+                    <span class="form-tip">Enter one or more comma-separated receipt numbers. Never pre-filled from background files.</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="cookie-input">
+                        Session Cookie (<code>_myuscis_session_rx</code>)
+                        <button type="button" class="info-btn" onclick="openCookieModal()" title="Click to see where to find your session cookie">ℹ️</button>
+                    </label>
+                    <input 
+                        type="password" 
+                        id="cookie-input" 
+                        class="form-control" 
+                        placeholder="Paste _myuscis_session_rx value or full Cookie header"
+                        value=""
+                        autocomplete="off"
+                    >
+                    <span class="form-tip">
+                        In your logged-in myUSCIS tab: Press <code>F12</code> &rarr; <code>Application</code> &rarr; <code>Cookies</code> &rarr; copy <code>_myuscis_session_rx</code>.
+                    </span>
+                </div>
+            </div>
+
+            <div class="query-actions">
+                <button class="btn btn-primary" id="btn-fetch" onclick="fetchLiveCases()">
+                    ⚡ Fetch Live Updates
+                </button>
+                <button class="btn btn-ghost" onclick="toggleCookieVisibility()">
+                    👁️ Toggle Cookie
+                </button>
+            </div>
+        </div>
+
+        <!-- RAW / EMPTY STATE (Shown when no live cases fetched) -->
+        {% if not cases %}
+        <div class="empty-authentic-card" id="empty-state">
+            <div class="empty-authentic-icon">📡</div>
+            <div class="empty-authentic-title">Awaiting Live Query (Clean Slate)</div>
+            <div class="empty-authentic-desc">
+                This dashboard starts completely raw and empty to guarantee authentic results. 
+                No data is pre-loaded from past sessions, cached files, or background environment variables. 
+                Enter your receipt number(s) and session cookie above to pull real-time updates directly from the official USCIS internal API.
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Stats Overview (Shown when cases are active) -->
+        {% if cases %}
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card blue">
+                <div class="stat-icon blue">📦</div>
+                <div class="stat-label">Cases Fetched</div>
+                <div class="stat-value">{{ cases | length }}</div>
+                <div class="stat-sub">Live authentic results</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-icon green">🕐</div>
+                <div class="stat-label">Last Checked</div>
+                <div class="stat-value" id="last-checked" style="font-size: 16px;">
+                    {{ last_checked | format_datetime if last_checked else 'Just now' }}
+                </div>
+                <div class="stat-sub">Direct myUSCIS API</div>
+            </div>
+            <div class="stat-card amber">
+                <div class="stat-icon amber">👁️</div>
+                <div class="stat-label">Silent Updates</div>
+                <div class="stat-value" id="silent-count">{{ silent_update_count }}</div>
+                <div class="stat-sub">Hidden changes detected</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-icon purple">🔔</div>
+                <div class="stat-label">Total Events</div>
+                <div class="stat-value" id="total-changes">{{ total_event_count }}</div>
+                <div class="stat-sub">Across all queried cases</div>
+            </div>
+        </div>
+
+        <!-- Case Status Cards -->
+        <div class="section-card" id="section-cases">
+            <div class="section-header">
+                <div class="section-title">
+                    <span class="icon">📦</span>
+                    Queried Cases (Live)
+                </div>
+                <span class="status-badge active">
+                    <span class="dot"></span>
+                    Live Direct
+                </span>
+            </div>
+            <div class="section-body">
+                <div class="case-cards">
+                    {% for receipt, data in cases.items() %}
+                    <div class="case-card" id="case-{{ receipt }}">
+                        <div class="case-receipt">{{ receipt }}</div>
+                        <div class="case-form">{{ data.form_type }}{% if data.form_name %} &mdash; {{ data.form_name }}{% endif %}</div>
+                        <div class="case-status">{{ data.current_status or 'Pending' }}</div>
+
+                        <div class="case-meta">
+                            <div class="meta-item">
+                                <span class="meta-label">Applicant</span>
+                                <span class="meta-value">{{ data.applicant_name or 'N/A' }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Filed</span>
+                                <span class="meta-value">{{ data.submission_date or 'N/A' }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Last Internal Update</span>
+                                <span class="meta-value" style="color: var(--accent-amber);">
+                                    {{ data.last_updated_at[:10] if data.last_updated_at else 'N/A' }}
+                                </span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Latest Event Code</span>
+                                <span class="meta-value" style="color: var(--accent-cyan); font-family: monospace;">
+                                    {{ data.latest_event_code or 'N/A' }}
+                                </span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Processing Channel</span>
+                                <span class="meta-value">{{ data.service_center or 'N/A' }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Status</span>
+                                <span class="meta-value">
+                                    {% if data.closed %}Closed{% elif data.action_required %}<span style="color: var(--accent-rose);">Action Required</span>{% else %}Open{% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Case-specific event timeline -->
+                        {% if data.event_history %}
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
+                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; margin-bottom: 10px;">
+                                Internal Event Log ({{ data.event_history | length }} events)
+                            </div>
+                            <div class="timeline" style="max-height: 220px; overflow-y: auto;">
+                                {% for evt in data.event_history %}
+                                <div class="timeline-item">
+                                    <div class="timeline-dot"></div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-title">
+                                            <span style="color: var(--accent-cyan); font-family: monospace; font-weight: 700;">[{{ evt.code }}]</span>
+                                            {{ evt.description }}
+                                        </div>
+                                        <div class="timeline-meta">
+                                            <span>📅 {{ evt.event_date or 'N/A' }}</span>
+                                            {% if evt.created_at_timestamp %}
+                                            <span style="margin-left: 8px; color: var(--text-muted);">Timestamp: {{ evt.created_at_timestamp[:19] }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Event Code Reference -->
+        <div class="section-card" id="section-codes" style="margin-top: 2rem;">
+            <div class="section-header">
+                <div class="query-title">
+                    <span>🔑</span>
+                    myUSCIS Internal Event Code Reference
+                </div>
+            </div>
+            <div class="section-body" style="max-height: 280px; overflow-y: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Meaning</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for code, desc in event_codes.items() %}
+                        <tr>
+                            <td><span style="color: var(--accent-cyan); font-family: monospace; font-weight: 700;">{{ code }}</span></td>
+                            <td>{{ desc }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // Load saved session inputs from browser tab storage if available
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedReceipts = sessionStorage.getItem('uscis_receipts');
+            const savedCookie = sessionStorage.getItem('uscis_cookie');
+            if (savedReceipts) document.getElementById('receipt-input').value = savedReceipts;
+            if (savedCookie) document.getElementById('cookie-input').value = savedCookie;
+        });
+
+        function toggleCookieVisibility() {
+            const el = document.getElementById('cookie-input');
+            el.type = el.type === 'password' ? 'text' : 'password';
+        }
+
+        async function fetchLiveCases() {
+            const receiptInput = document.getElementById('receipt-input');
+            const cookieInput = document.getElementById('cookie-input');
+            const btn = document.getElementById('btn-fetch');
+
+            const receipts = receiptInput.value.trim();
+            const cookie = cookieInput.value.trim();
+
+            if (!receipts) {
+                showToast('Please enter your USCIS receipt number(s).', 'warning');
+                receiptInput.focus();
+                return;
+            }
+
+            if (!cookie) {
+                showToast('Please paste your _myuscis_session_rx cookie from your logged-in myUSCIS tab.', 'warning');
+                cookieInput.focus();
+                return;
+            }
+
+            // Save to tab session storage
+            sessionStorage.setItem('uscis_receipts', receipts);
+            sessionStorage.setItem('uscis_cookie', cookie);
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner"></span> Fetching Live From USCIS...';
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch('/api/fetch-live', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        receipt_numbers: receipts,
+                        cookie: cookie
+                    })
+                });
+
+                const data = await resp.json();
+
+                if (data.success) {
+                    showToast(`Successfully fetched ${data.count} case(s) live from myUSCIS!`, 'success');
+                    setTimeout(() => window.location.reload(), 800);
+                } else {
+                    showToast(data.error || 'Failed to fetch live case updates.', 'error');
+                }
+            } catch (err) {
+                showToast('Network error: ' + err.message, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function resetToEmpty() {
+            try {
+                sessionStorage.removeItem('uscis_receipts');
+                sessionStorage.removeItem('uscis_cookie');
+                await fetch('/api/clear-session', { method: 'POST' });
+                showToast('Dashboard reset to raw/empty state.', 'success');
+                setTimeout(() => window.location.reload(), 500);
+            } catch (e) {
+                window.location.reload();
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icons = { success: '✅', warning: '⚠️', error: '❌' };
+            toast.innerHTML = `
+                <span>${icons[type] || '📌'}</span>
+                <span class="toast-message">${message}</span>
+                <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 7000);
+        }
+
+        function openCookieModal() {
+            document.getElementById('cookie-modal').classList.add('open');
+        }
+
+        function closeCookieModal() {
+            document.getElementById('cookie-modal').classList.remove('open');
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeCookieModal();
+        });
+    </script>
+
+    <!-- Cookie Guide Modal -->
+    <div class="modal-backdrop" id="cookie-modal" onclick="if(event.target===this) closeCookieModal()">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>🍪</span>
+                    How to Get Your myUSCIS Session Cookie
+                </div>
+                <button class="modal-close" onclick="closeCookieModal()" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="guide-step">
+                    <div class="step-num">1</div>
+                    <div class="step-detail">
+                        <h4>Log in to myUSCIS</h4>
+                        <p>Open <a href="https://my.uscis.gov/" target="_blank" style="color: var(--accent-cyan); text-decoration: underline;">my.uscis.gov</a> in Chrome, Edge, or Firefox and sign in with your email, password, and two-factor code (2FA) until you see your account dashboard.</p>
+                    </div>
+                </div>
+
+                <div class="guide-step">
+                    <div class="step-num">2</div>
+                    <div class="step-detail">
+                        <h4>Open Browser Developer Tools</h4>
+                        <p>On that same logged-in myUSCIS tab, press <kbd>F12</kbd> (or <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd> on Windows, <kbd>Cmd</kbd> + <kbd>Option</kbd> + <kbd>I</kbd> on Mac), or right-click anywhere and choose <b>Inspect</b>.</p>
+                    </div>
+                </div>
+
+                <div class="guide-step">
+                    <div class="step-num">3</div>
+                    <div class="step-detail">
+                        <h4>Navigate to Storage &rarr; Cookies</h4>
+                        <p>In the developer tools panel top bar, click the <b>Application</b> tab (if narrow, click <code>&gt;&gt;</code> to reveal it). On the left panel under <b>Storage</b>, expand <b>Cookies</b> and click <code>https://my.uscis.gov</code>.</p>
+                    </div>
+                </div>
+
+                <div class="guide-step">
+                    <div class="step-num">4</div>
+                    <div class="step-detail">
+                        <h4>Copy the <code>_myuscis_session_rx</code> Value</h4>
+                        <p>Look down the <b>Name</b> column for <code>_myuscis_session_rx</code>. Double-click its row under the <b>Value</b> column, copy it (<kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>Cmd</kbd> + <kbd>C</kbd>), and paste it into the <b>Session Cookie</b> field here.</p>
+                    </div>
+                </div>
+
+                <div class="guide-note">
+                    🔒 <b>Privacy Note:</b> The <code>_myuscis_session_rx</code> cookie is temporary and expires when your session ends. It does not store your account password and is never saved permanently by this app.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeCookieModal()">Got It, Let's Track!</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
