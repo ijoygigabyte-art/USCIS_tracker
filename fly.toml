@@ -1,6 +1,10 @@
-# fly.toml app configuration file generated for uscis-tracker-8bf0rq
-app = 'uscis-tracker-8bf0rq'
-primary_region = 'iad'
+# fly.toml app configuration file generated for uscis-tracker-w9tjhw on 2026-09-02T19:12:40Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'uscis-tracker-w9tjhw'
+primary_region = 'ams'
 
 [build]
 
@@ -16,3 +20,4 @@ primary_region = 'iad'
   memory = '512mb'
   cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
